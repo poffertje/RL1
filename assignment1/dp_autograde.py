@@ -23,18 +23,19 @@ def policy_eval_v(policy, env, discount_factor=1.0, theta=0.00001):
     while True:
         delta = 0
 
-        for state in range(env.nS):
+        for state in env.P:
             v = V[state]
-
+            v_new = 0 
+            
             for action, action_p in enumerate(policy[state]):
                 temp = 0
                 
                 for  prob, next_state, reward, _ in env.P[state][action]:
                     temp += prob * (reward + discount_factor * V[next_state])
-                    
-                v += action_p * temp
                 
-            V[state] = v        
+                v_new += action_p * temp
+            
+            V[state] = v_new       
             delta = max(delta, np.abs(v - V[state]))
             
         if delta < theta:
@@ -68,7 +69,7 @@ def policy_iter_v(env, policy_eval_v=policy_eval_v, discount_factor=1.0):
         V = policy_eval_v(policy, env, discount_factor)
         # Step 3
         policy_stable = True
-        for state in range(env.nS):
+        for state in env.P:
             old_action = np.argmax(policy[state])
 
             action_probs = np.zeros(env.nA)
@@ -76,13 +77,57 @@ def policy_iter_v(env, policy_eval_v=policy_eval_v, discount_factor=1.0):
                 for prob, next_state, reward, _ in env.P[state][action]:
                     action_probs[action] += prob * (reward + discount_factor * V[next_state])
             
-            action = np.argmax(action_probs)
-            policy[state] = np.identity(env.nA)[action]
+            new_action = np.argmax(action_probs)
+            policy[state] = np.identity(env.nA)[new_action]
             
-            if old_action != action:
+            if old_action != new_action:
                 policy_stable = False
             
         if policy_stable:
             break
 
     return policy, V
+
+def value_iter_q(env, theta=0.0001, discount_factor=1.0):
+    """
+    Q-value Iteration Algorithm.
+    
+    Args:
+        env: OpenAI env. env.P represents the transition probabilities of the environment.
+            env.P[s][a] is a list of transition tuples (prob, next_state, reward, done).
+            env.nS is a number of states in the environment. 
+            env.nA is a number of actions in the environment.
+        theta: We stop evaluation once our value function change is less than theta for all state-action pairs.
+        discount_factor: Gamma discount factor.
+        
+    Returns:
+        A tuple (policy, Q) of the optimal policy and the optimal Q-value function.        
+    """
+    
+    # Start with an all 0 Q-value function
+    Q = np.zeros((env.nS, env.nA))
+    # YOUR CODE HERE
+    policy = np.ones([env.nS, env.nA]) / env.nA
+    
+    while True:
+        delta = 0 
+        
+        for state in env.P:
+            
+            for action in range(env.nA):
+                q_old = Q[state, action]
+                q_new = 0
+                
+                for  prob, next_state, reward, _ in env.P[state][action]:
+                    q_next = np.max(Q[next_state])
+                    q_new += prob * (reward + discount_factor * q_next) 
+            
+                Q[state, action] = q_new
+                delta = max(delta, abs(q_old - Q[state, action]))
+        
+        policy = np.eye(env.nA)[np.argmax(Q, axis=1)]
+        
+        if delta < theta:
+            break
+            
+    return policy, Q
